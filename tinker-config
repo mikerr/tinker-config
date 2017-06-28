@@ -147,56 +147,6 @@ No other symbols, punctuation characters, or blank spaces are permitted.\
   fi
 }
 
-do_overclock() {
-  whiptail --msgbox "\
-Be aware that overclocking may reduce the lifetime of your
-Asus Tinker Board. If overclocking at a certain level causes
-system instability, try a more modest overclock. Hold down
-shift during boot to temporarily disable overclock.
-See http://elinux.org/RTinkerboard_Overclocking for more information.\
-" 20 70 1
-  OVERCLOCK=$(whiptail --menu "Chose overclock preset" 20 60 10 \
-    "None" "700MHz ARM, 250MHz core, 400MHz SDRAM, 0 overvolt" \
-    "Modest" "800MHz ARM, 250MHz core, 400MHz SDRAM, 0 overvolt" \
-    "Medium" "900MHz ARM, 250MHz core, 450MHz SDRAM, 2 overvolt" \
-    "High" "950MHz ARM, 250MHz core, 450MHz SDRAM, 6 overvolt" \
-    "Turbo" "1000MHz ARM, 500MHz core, 600MHz SDRAM, 6 overvolt" \
-    "Tinkerboard2" "1000MHz ARM, 500MHz core, 500MHz SDRAM, 2 overvolt" \
-    3>&1 1>&2 2>&3)
-  if [ $? -eq 0 ]; then
-    case "$OVERCLOCK" in
-      None)
-        set_overclock None 700 250 400 0
-        ;;
-      Modest)
-        set_overclock Modest 800 250 400 0
-        ;;
-      Medium)
-        set_overclock Medium 900 250 450 2
-        ;;
-      High)
-        set_overclock High 950 250 450 6
-        ;;
-      Turbo)
-        set_overclock Turbo 1000 500 600 6
-        ;;
-      *)
-        whiptail --msgbox "Programmer error, unrecognised overclock preset" 20 60 2
-        return 1
-        ;;
-    esac
-    ASK_TO_REBOOT=1
-  fi
-}
-
-set_overclock() {
-  set_config_var arm_freq $2 $CONFIG &&
-  set_config_var core_freq $3 $CONFIG &&
-  set_config_var sdram_freq $4 $CONFIG &&
-  set_config_var over_voltage $5 $CONFIG &&
-  whiptail --msgbox "Set overclock to preset '$1'" 20 60 2
-}
-
 do_wifi() {
 
 wifidevice=wlan0
@@ -485,10 +435,10 @@ do_logging() {
   whiptail --yesno "Would you like to show logging messages on screen during bootup ?" 20 60 2
   RET=$?
   if [ $RET -eq 1 ]; then
-      sed -i /boot/extlinux/extlinux.conf -e "s/console=tty[^ ]\+ /console=ttyS1 /"
+      sed -i $CMDLINE -e "s/console=tty[^ ]\+ /console=ttyS1 /"
       whiptail --msgbox "Log messages are now disabled (silent boot)" 20 60 1
   elif [ $RET -eq 0 ]; then
-      sed -i /boot/extlinux/extlinux.conf -e "s/console=tty[^ ]\+ /console=tty0 /"
+      sed -i $CMDLINE -e "s/console=tty[^ ]\+ /console=tty0 /"
       whiptail --msgbox "Log messages are now enabled" 20 60 1
     fi
 }
@@ -622,46 +572,6 @@ EOF
   return 0
 }
 
-#
-# Command line options for non-interactive use
-#
-for i in $*
-do
-  case $i in
-  --memory-split)
-    OPT_MEMORY_SPLIT=GET
-    printf "Not currently supported\n"
-    exit 1
-    ;;
-  --memory-split=*)
-    OPT_MEMORY_SPLIT=`echo $i | sed 's/[-a-zA-Z0-9]*=//'`
-    printf "Not currently supported\n"
-    exit 1
-    ;;
-  --expand-rootfs)
-    INTERACTIVE=False
-    do_expand_rootfs
-    printf "Please reboot\n"
-    exit 0
-    ;;
-  --apply-os-config)
-    INTERACTIVE=False
-    do_apply_os_config
-    exit $?
-    ;;
-  *)
-    # unknown option
-    ;;
-  esac
-done
-
-#if [ "GET" = "${OPT_MEMORY_SPLIT:-}" ]; then
-#  set -u # Fail on unset variables
-#  get_current_memory_split
-#  echo $CURRENT_MEMSPLIT
-#  exit 0
-#fi
-
 # Everything else needs to be run as root
 if [ $(id -u) -ne 0 ]; then
   printf "Script must be run as root. Try 'sudo tinker-config'\n"
@@ -732,10 +642,9 @@ while true; do
     "3 Enable Boot Messages" "Show logging messages on startup" \
     "4 Enable Boot to CLI/Desktop" "Choose whether to boot into a desktop environment,  or the command-line" \
     "5 Internationalisation Options" "Set up language and regional settings to match your location" \
-    "6 Overclock" "Configure overclocking for your Tinkerboard" \
-    "7 Setup WiFi " "Configure WiFi settings" \
-    "8 Advanced Options" "Configure advanced settings" \
-    "9 About tinker-config" "Information about this configuration tool" \
+    "6 Setup WiFi " "Configure WiFi settings" \
+    "7 Advanced Options" "Configure advanced settings" \
+    "8 About tinker-config" "Information about this configuration tool" \
     3>&1 1>&2 2>&3)
   RET=$?
   if [ $RET -eq 1 ]; then
@@ -747,10 +656,9 @@ while true; do
       3\ *) do_logging ;;
       4\ *) do_boot_behaviour ;;
       5\ *) do_internationalisation_menu ;;
-      6\ *) do_overclock ;;
-      7\ *) do_wifi ;;
-      8\ *) do_advanced_menu ;;
-      9\ *) do_about ;;
+      6\ *) do_wifi ;;
+      7\ *) do_advanced_menu ;;
+      8\ *) do_about ;;
       *) whiptail --msgbox "Programmer error: unrecognized option" 20 60 1 ;;
     esac || whiptail --msgbox "There was an error running option $FUN" 20 60 1
   else
