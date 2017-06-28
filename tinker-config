@@ -317,6 +317,102 @@ set_overclock() {
   whiptail --msgbox "Set overclock to preset '$1'" 20 60 2
 }
 
+do_wifi() {
+
+wifidevice=wlan0
+WPAFILE=/etc/wpa_supplicant/wpa_supplicant.conf
+
+{
+iwlist $wifidevice scan | grep 'ESSID' | sed -e 's/.*ESSID:"\([^"]\+\)".*/  \1/' > /tmp/ap_list.txt 
+} | whiptail --gauge "Scanning Wifi, please wait" 5 50 10
+
+echo "whiptail --title \"Choose SSID, or enter manually\" \\" > /tmp/choose_ap.sh
+echo "--radiolist \"Choose SSID\" \\" >> /tmp/choose_ap.sh
+
+LINES=`wc -l < /tmp/ap_list.txt`
+LINES=$((${LINES}+1))
+echo "10 60 ${LINES} \\" >> /tmp/choose_ap.sh
+for LINE in `cat /tmp/ap_list.txt`
+    do
+  	echo "$LINE '' off \\" >> /tmp/choose_ap.sh
+    done
+echo "Enter\ manually '' on 2>/tmp/ssid.ans" >>/tmp/choose_ap.sh
+    
+chmod 777 /tmp/choose_ap.sh
+. /tmp/choose_ap.sh
+	  	
+if [ $? -ne 0 ]; then return 0; fi
+
+SSID=`cat /tmp/ssid.ans`
+if [ "$SSID" = "Enter manually" ]; then
+  		SSID=$(whiptail --inputbox "SSID Name" 20 70 3>&1 1>&2 2>&3)
+		if [ -z $SSID ]; then return 0 ; fi
+fi
+
+ENCRYPTION=$(whiptail --title "Encryption" --menu "Encryption for network: $SSID " $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT --cancel-button Back --ok-button Select \
+          "1" "WPA/WPA2" \
+          "2" "WEP (hex)" \
+          "3" "WEP (ascii)" \
+          "4" "None" \
+    	  3>&1 1>&2 2>&3)
+
+if [ $? -ne 0 ]; then return 0; fi
+
+WPANEW=/tmp/wpanew.conf
+WPATMP=/tmp/wpa.conf
+
+case $ENCRYPTION in
+		'1')
+  			PASSPHRASE=$(whiptail --inputbox "WPA Passphrase for $SSID" 20 70 3>&1 1>&2 2>&3)
+  			if [ $? -ne 0 ]; then return 0; fi
+	 		CRYPTPASS=$(wpa_passphrase $SSID $PASSPHRASE | grep -v "^#" | grep -v "#psk=")
+			PASSERROR="Passphrase must be 8..63 characters"
+  			if [ "$CRYPTPASS" != "$PASSERROR" ]; then 
+				echo "$CRYPTPASS" > $WPANEW
+			else
+				whiptail --msgbox "ERROR: $PASSERROR" 20 70 1
+				return 0;
+			fi
+		;;
+		'2')
+  			PASSPHRASE=$(whiptail --inputbox "WEP key (Hex)" 20 70 3>&1 1>&2 2>&3)
+  			if [ $? -ne 0 ]; then return 0; fi
+
+	                echo "network={
+                         	ssid=\"$SSID\"
+                        	key_mgmt=NONE
+                          	wep_key0=$PASSPHRASE
+                          	}" > $WPANEW
+		;;
+		'3')
+  			PASSPHRASE=$(whiptail --inputbox "WEP key (ascii)" 20 70 3>&1 1>&2 2>&3)
+  			if [ $? -ne 0 ]; then return 0; fi
+
+		 	echo "network={
+		               ssid=\"$SSID\"
+		               key_mgmt=NONE
+		               wep_key0=\"$PASSPHRASE\"
+		               }" > $WPANEW
+		;;
+		'4')
+			echo "network={
+		               ssid=\"$SSID\"
+		               key_mgmt=NONE
+		               }" > $WPANEW
+		;;
+esac
+# Remove previous matching SSID config first
+perl -00 -pe "s/network=\{[^}]*ssid=\"$SSID\"*[^}]*\}//g" $WPAFILE > $WPATMP
+# append /merge new config at end of config file
+cat $WPATMP $WPANEW > $WPAFILE
+
+whiptail --msgbox "Wifi settings updated for SSID: $SSID" 20 60 1
+
+# connect right now ?
+wpa_supplicant -B -i$wifidevice -c $WPAFILE
+dhclient $wifidevice -1 
+
+}
 do_ssh() {
   if [ -e /var/log/regen_ssh_keys.log ] && ! grep -q "^finished" /var/log/regen_ssh_keys.log; then
     whiptail --msgbox "Initial ssh key generation still running. Please wait and try again." 20 60 2
@@ -673,55 +769,6 @@ registration.\
   read TMP
 }
 
-# $1 is 0 to disable camera, 1 to enable it
-set_camera() {
-  # Stop if /boot is not a mountpoint
-  if ! mountpoint -q /boot; then
-    return 1
-  fi
-
-  [ -e $CONFIG ] || touch $CONFIG
-
-  if [ "$1" -eq 0 ]; then # disable camera
-    set_config_var start_x 0 $CONFIG
-    sed $CONFIG -i -e "s/^startx/#startx/"
-    sed $CONFIG -i -e "s/^start_file/#start_file/"
-    sed $CONFIG -i -e "s/^fixup_file/#fixup_file/"
-  else # enable camera
-    set_config_var start_x 1 $CONFIG
-    CUR_GPU_MEM=$(get_config_var gpu_mem $CONFIG)
-    if [ -z "$CUR_GPU_MEM" ] || [ "$CUR_GPU_MEM" -lt 128 ]; then
-      set_config_var gpu_mem 128 $CONFIG
-    fi
-    sed $CONFIG -i -e "s/^startx/#startx/"
-    sed $CONFIG -i -e "s/^fixup_file/#fixup_file/"
-  fi
-}
-
-do_camera() {
-  if [ ! -e /boot/start_x.elf ]; then
-    whiptail --msgbox "Your firmware appears to be out of date (no start_x.elf). Please update" 20 60 2
-    return 1
-  fi
-  whiptail --yesno "Enable support for Asus Tinker Board camera?" 20 60 2 \
-    --yes-button Disable --no-button Enable
-  RET=$?
-  if [ $RET -eq 0 ] || [ $RET -eq 1 ]; then
-    ASK_TO_REBOOT=1
-    set_camera $RET;
-  else
-    return 1
-  fi
-}
-
-do_update() {
-  apt-get update &&
-  apt-get install tinker-config &&
-  printf "Sleeping 5 seconds before reloading tinker-config\n" &&
-  sleep 5 &&
-  exec tinker-config
-}
-
 do_audio() {
   AUDIO_OUT=$(whiptail --menu "Choose the audio output" 20 60 10 \
     "0" "Auto" \
@@ -913,7 +960,6 @@ do_advanced_menu() {
     "A7 I2C" "Enable/Disable automatic loading of I2C kernel module" \
     "A8 Serial" "Enable/Disable shell and kernel messages on the serial connection" \
     "A9 Audio" "Force audio out through HDMI or 3.5mm jack" \
-    "A0 Update" "Update this tool to the latest version" \
     3>&1 1>&2 2>&3)
   RET=$?
   if [ $RET -eq 1 ]; then
@@ -923,13 +969,12 @@ do_advanced_menu() {
       A1\ *) do_overscan ;;
       A2\ *) do_change_hostname ;;
       A3\ *) do_memory_split ;;
-      A4\ *) do_ssh ;;
+      A4\ *) do_wifi ;;
       A5\ *) do_devicetree ;;
       A6\ *) do_spi ;;
       A7\ *) do_i2c ;;
       A8\ *) do_serial ;;
       A9\ *) do_audio ;;
-      A0\ *) do_update ;;
       *) whiptail --msgbox "Programmer error: unrecognized option" 20 60 1 ;;
     esac || whiptail --msgbox "There was an error running option $FUN" 20 60 1
   fi
@@ -944,13 +989,12 @@ while true; do
   FUN=$(whiptail --title "Asus Tinker Board Software Configuration Tool (tinker-config)" --menu "Setup Options" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT --cancel-button Finish --ok-button Select \
     "1 Expand Filesystem" "Ensures that all of the SD card storage is available to the OS" \
     "2 Change User Password" "Change password for the default user (pi)" \
-    "3 Enable Boot to Desktop/Scratch" "Choose whether to boot into a desktop environment, Scratch, or the command-line" \
+    "3 Enable Boot to CLI/Desktop/Scratch" "Choose whether to boot into a desktop environment, Scratch, or the command-line" \
     "4 Internationalisation Options" "Set up language and regional settings to match your location" \
-    "5 Enable Camera" "Enable this Tinkerboard to work with the Asus Tinker Board Camera" \
-    "6 Add to Rastrack" "Add this Tinkerboard to the online Asus Tinker Board Map (Rastrack)" \
-    "7 Overclock" "Configure overclocking for your Tinkerboard" \
-    "8 Advanced Options" "Configure advanced settings" \
-    "9 About tinker-config" "Information about this configuration tool" \
+    "5 Overclock" "Configure overclocking for your Tinkerboard" \
+    "6 Setup WiFi " "Configure WiFi settings" \
+    "7 Advanced Options" "Configure advanced settings" \
+    "8 About tinker-config" "Information about this configuration tool" \
     3>&1 1>&2 2>&3)
   RET=$?
   if [ $RET -eq 1 ]; then
@@ -961,11 +1005,10 @@ while true; do
       2\ *) do_change_pass ;;
       3\ *) do_boot_behaviour ;;
       4\ *) do_internationalisation_menu ;;
-      5\ *) do_camera ;;
-      6\ *) do_rastrack ;;
-      7\ *) do_overclock ;;
-      8\ *) do_advanced_menu ;;
-      9\ *) do_about ;;
+      5\ *) do_overclock ;;
+      6\ *) do_wifi ;;
+      7\ *) do_advanced_menu ;;
+      8\ *) do_about ;;
       *) whiptail --msgbox "Programmer error: unrecognized option" 20 60 1 ;;
     esac || whiptail --msgbox "There was an error running option $FUN" 20 60 1
   else
