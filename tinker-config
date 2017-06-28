@@ -3,7 +3,8 @@
 
 INTERACTIVE=True
 ASK_TO_REBOOT=0
-CONFIG=/boot/extlinux/extlinux.conf
+CMDLINE=/boot/extlinux/extlinux.conf
+CONFIG=/boot/hw_intf.conf
 
 calc_wt_size() {
   # NOTE: it's tempting to redirect stderr to /dev/null, so supress error 
@@ -635,6 +636,17 @@ do_serial() {
   fi
 }
 
+do_logging() {
+  whiptail --yesno "Would you like to show logging messages on screen during bootup ?" 20 60 2
+  RET=$?
+  if [ $RET -eq 1 ]; then
+      sed -i /boot/extlinux/extlinux.conf -e "s/console=tty[^ ]\+ /console=ttyS1 /"
+      whiptail --msgbox "Log messages are now disabled (silent boot)" 20 60 1
+  elif [ $RET -eq 0 ]; then
+      sed -i /boot/extlinux/extlinux.conf -e "s/console=tty[^ ]\+ /console=tty0 /"
+      whiptail --msgbox "Log messages are now enabled" 20 60 1
+    fi
+}
 do_boot_behaviour() {
   BOOTOPT=$(whiptail --menu "Chose boot option" 20 60 10 \
     "Console" "Text console, requiring login" \
@@ -669,7 +681,6 @@ do_audio() {
 }
 
 do_finish() {
-  disable_tinker_config_at_boot
   if [ $ASK_TO_REBOOT -eq 1 ]; then
     whiptail --yesno "Would you like to reboot now?" 20 60 2
     if [ $? -eq 0 ]; then # yes
@@ -877,12 +888,13 @@ while true; do
   FUN=$(whiptail --title "Asus Tinker Board Software Configuration Tool (tinker-config)" --menu "Setup Options" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT --cancel-button Finish --ok-button Select \
     "1 Expand Filesystem" "Ensures that all of the SD card storage is available to the OS" \
     "2 Change User Password" "Change password for the default user (pi)" \
-    "3 Enable Boot to CLI/Desktop" "Choose whether to boot into a desktop environment,  or the command-line" \
-    "4 Internationalisation Options" "Set up language and regional settings to match your location" \
-    "5 Overclock" "Configure overclocking for your Tinkerboard" \
-    "6 Setup WiFi " "Configure WiFi settings" \
-    "7 Advanced Options" "Configure advanced settings" \
-    "8 About tinker-config" "Information about this configuration tool" \
+    "3 Enable Boot Messages" "Show logging messages on startup" \
+    "4 Enable Boot to CLI/Desktop" "Choose whether to boot into a desktop environment,  or the command-line" \
+    "5 Internationalisation Options" "Set up language and regional settings to match your location" \
+    "6 Overclock" "Configure overclocking for your Tinkerboard" \
+    "7 Setup WiFi " "Configure WiFi settings" \
+    "8 Advanced Options" "Configure advanced settings" \
+    "9 About tinker-config" "Information about this configuration tool" \
     3>&1 1>&2 2>&3)
   RET=$?
   if [ $RET -eq 1 ]; then
@@ -891,12 +903,13 @@ while true; do
     case "$FUN" in
       1\ *) do_expand_rootfs ;;
       2\ *) do_change_pass ;;
-      3\ *) do_boot_behaviour ;;
-      4\ *) do_internationalisation_menu ;;
-      5\ *) do_overclock ;;
-      6\ *) do_wifi ;;
-      7\ *) do_advanced_menu ;;
-      8\ *) do_about ;;
+      3\ *) do_logging ;;
+      4\ *) do_boot_behaviour ;;
+      5\ *) do_internationalisation_menu ;;
+      6\ *) do_overclock ;;
+      7\ *) do_wifi ;;
+      8\ *) do_advanced_menu ;;
+      9\ *) do_about ;;
       *) whiptail --msgbox "Programmer error: unrecognized option" 20 60 1 ;;
     esac || whiptail --msgbox "There was an error running option $FUN" 20 60 1
   else
