@@ -635,57 +635,6 @@ do_serial() {
   fi
 }
 
-disable_tinker_config_at_boot() {
-  if [ -e /etc/profile.d/tinker-config.sh ]; then
-    rm -f /etc/profile.d/tinker-config.sh
-    sed -i /etc/inittab \
-      -e "s/^#\(.*\)#\s*RPICFG_TO_ENABLE\s*/\1/" \
-      -e "/#\s*RPICFG_TO_DISABLE/d"
-    telinit q
-  fi
-}
-
-enable_boot_to_scratch() {
-  if [ -e /etc/profile.d/boottoscratch.sh ]; then
-    printf "/etc/profile.d/boottoscratch.sh exists, so assuming boot to scratch enabled\n"
-    return 0;
-  fi
-  sed -i /etc/inittab -e "s|^\(1:2345.*getty.*tty1.*\)|\
-#\1 # BTS_TO_ENABLE\n1:2345:respawn:/bin/login -f pi tty1 </dev/tty1 >/dev/tty1 2>\&1 # BTS_TO_DISABLE|"
-  cat <<\EOF > /etc/profile.d/boottoscratch.sh
-#!/bin/sh
-# Part of tinker-config http://github.com/asb/raspi-config
-#
-# See LICENSE file for copyright and license details
-
-# Should be installed to /etc/profile.d/boottoscratch.sh to force scratch to run upon boot
-
-# You may also want to set automatic login in /etc/inittab on tty1 by adding a 
-# line such as the following (tinker-config does this for you):
-# 1:2345:respawn:/bin/login -f pi tty1 </dev/tty1 >/dev/tty1 2>&1 # BTS_TO_DISABLE
-
-if [ $(tty) = "/dev/tty1" ]; then
-  printf "openbox --config-file /home/pi/boottoscratch/openbox_rc.xml & scratch" | xinit /dev/stdin
-  printf "\n\n\nShutting down in 5 seconds, hit ctrl-C to cancel\n" && sleep 5 && sudo shutdown -h now
-fi
-EOF
-
-  mkdir -p /home/pi/boottoscratch
-  cat <<\EOF > /home/pi/boottoscratch/openbox_rc.xml
-<?xml version="1.0" encoding="UTF-8"?>
-<openbox_config xmlns="http://openbox.org/3.4/rc"
-    xmlns:xi="http://www.w3.org/2001/XInclude">
-<applications>
-  <application name="squeak" type="normal">
-    <focus>yes</focus>
-    <fullscreen>yes</fullscreen>
-  </application>
-</applications>
-</openbox_config>
-EOF
-  telinit q
-}
-
 do_boot_behaviour() {
   BOOTOPT=$(whiptail --menu "Chose boot option" 20 60 10 \
     "Console" "Text console, requiring login" \
@@ -895,7 +844,7 @@ do_advanced_menu() {
     "A3 Memory Split" "Change the amount of memory made available to the GPU" \
     "A4 SSH" "Enable/Disable remote command line access to your Tinkerboard using SSH" \
     "A5 Device Tree" "Enable/Disable the use of Device Tree" \
-    "A6 SPI" "Enable/Disable automatic loading of SPI kernel module (needed for e.g. TinkerboardFace)" \
+    "A6 SPI" "Enable/Disable automatic loading of SPI kernel module" \
     "A7 I2C" "Enable/Disable automatic loading of I2C kernel module" \
     "A8 Serial" "Enable/Disable shell and kernel messages on the serial connection" \
     "A9 Audio" "Force audio out through HDMI or 3.5mm jack" \
