@@ -686,49 +686,24 @@ EOF
   telinit q
 }
 
-disable_boot_to_scratch() {
-  if [ -e /etc/profile.d/boottoscratch.sh ]; then
-    rm -f /etc/profile.d/boottoscratch.sh
-    sed -i /etc/inittab \
-      -e "s/^#\(.*\)#\s*BTS_TO_ENABLE\s*/\1/" \
-      -e "/#\s*BTS_TO_DISABLE/d"
-    telinit q
-  fi
-}
-
 do_boot_behaviour() {
   BOOTOPT=$(whiptail --menu "Chose boot option" 20 60 10 \
-    "Console" "Text console, requiring login (default)" \
-    "Desktop" "Log in as user 'pi' at the graphical desktop" \
+    "Console" "Text console, requiring login" \
+    "Desktop" "Log in to the graphical desktop (default)" \
     "Scratch" "Start the Scratch programming environment upon boot" \
     3>&1 1>&2 2>&3)
   if [ $? -eq 0 ]; then
     case "$BOOTOPT" in
       Console)
-        [ -e /etc/init.d/lightdm ] && update-rc.d lightdm disable 2
-        disable_boot_to_scratch
-        ;;
+        systemctl set-default multi-user.target
+	;;
       Desktop)
-        if [ -e /etc/init.d/lightdm ]; then
-          if id -u pi > /dev/null 2>&1; then
-            update-rc.d lightdm enable 2
-            sed /etc/lightdm/lightdm.conf -i -e "s/^#autologin-user=.*/autologin-user=pi/"
-            disable_boot_to_scratch
-            disable_tinker_config_at_boot
-          else
-            whiptail --msgbox "The pi user has been removed, can't set up boot to desktop" 20 60 2
-          fi
-        else
-          whiptail --msgbox "Do sudo apt-get install lightdm to allow configuration of boot to desktop" 20 60 2
-          return 1
-        fi
+        systemctl set-default graphical.target
         ;;
       Scratch)
         if [ -e /usr/bin/scratch ]; then
           if id -u pi > /dev/null 2>&1; then
             [ -e /etc/init.d/lightdm ] && update-rc.d lightdm disable 2
-            disable_tinker_config_at_boot
-            enable_boot_to_scratch
           else
             whiptail --msgbox "The pi user has been removed, can't set up boot to scratch" 20 60 2
           fi
