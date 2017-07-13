@@ -343,7 +343,7 @@ calc_wt_size
 while true; do
   FUN=$(whiptail --title "Asus Tinker Board Software Configuration Tool (tinker-config)" --menu "Setup Options" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT --cancel-button Finish --ok-button Select \
     "1 Expand Filesystem" "Ensures that all of the SD card storage is available to the OS" \
-    "2 Change User Password" "Change password for the default user (pi)" \
+    "2 Change User Password" "Change password for the default user (linaro)" \
     "3 Enable Boot Messages" "Show logging messages on startup" \
     "4 Enable Boot to CLI/Desktop" "Choose whether to boot into a desktop environment,  or the command-line" \
     "5 Internationalisation Options" "Set up language and regional settings to match your location" \
