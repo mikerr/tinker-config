@@ -169,6 +169,18 @@ wpa_supplicant -B -i$wifidevice -c $WPAFILE
 dhclient $wifidevice -1 
 
 }
+do_display() {
+  RESOLUTION=$(whiptail --inputbox "Set a fixed screen resolution if autoconfig isn't working. \
+  Please enter a screen resolution, e.g. 800x600" 20 60 "800x600" 3>&1 1>&2 2>&3)
+  if [ $? -eq 0 ]; then
+    MONITORFILE=/usr/share/X11/xorg.conf.d/50-resolution.conf
+    echo "Section \"Monitor\"" > $MONITORFILE
+    echo "Identifier \"HDMI-1\"">> $MONITORFILE
+    echo "Option \"PreferredMode\" \"$RESOLUTION\"" >> $MONITORFILE
+    echo "EndSection" >> $MONITORFILE
+    ASK_TO_REBOOT=1
+  fi
+}
 do_ssh() {
   if [ -e /var/log/regen_ssh_keys.log ] && ! grep -q "^finished" /var/log/regen_ssh_keys.log; then
     whiptail --msgbox "Initial ssh key generation still running. Please wait and try again." 20 60 2
@@ -348,8 +360,9 @@ while true; do
     "4 Enable Boot to CLI/Desktop" "Choose whether to boot into a desktop environment,  or the command-line" \
     "5 Internationalisation Options" "Set up language and regional settings to match your location" \
     "6 Setup WiFi " "Configure WiFi settings" \
-    "7 Advanced Options" "Configure advanced settings" \
-    "8 About tinker-config" "Information about this configuration tool" \
+    "7 Display Options" "Configure display settings" \
+    "8 Advanced Options" "Configure advanced settings" \
+    "9 About tinker-confi9g" "Information about this configuration tool" \
     3>&1 1>&2 2>&3)
   RET=$?
   if [ $RET -eq 1 ]; then
@@ -362,8 +375,9 @@ while true; do
       4\ *) do_boot_behaviour ;;
       5\ *) do_internationalisation_menu ;;
       6\ *) do_wifi ;;
-      7\ *) do_advanced_menu ;;
-      8\ *) do_about ;;
+      7\ *) do_display ;;
+      8\ *) do_advanced_menu ;;
+      9\ *) do_about ;;
       *) whiptail --msgbox "Programmer error: unrecognized option" 20 60 1 ;;
     esac || whiptail --msgbox "There was an error running option $FUN" 20 60 1
   else
