@@ -328,6 +328,23 @@ get_json_string_val() {
   sed -n -e "s/^[[:space:]]*\"$2\"[[:space:]]*:[[:space:]]*\"\(.*\)\"[[:space:]]*,$/\1/p" $1
 }
 
+#
+# Command line options for non-interactive use
+#
+for i in $*
+do
+  case $i in
+  --expand-rootfs)
+    INTERACTIVE=False
+    do_expand_rootfs
+    exit 0
+    ;;
+  *)
+    # unknown option
+    ;;
+  esac
+done
+
 # Everything else needs to be run as root
 if [ $(id -u) -ne 0 ]; then
   printf "Script must be run as root. Try 'sudo tinker-config'\n"
@@ -395,7 +412,7 @@ while true; do
     "6 Setup WiFi " "Configure WiFi settings" \
     "7 Display Options" "Configure display settings" \
     "8 Advanced Options" "Configure advanced settings" \
-    "9 About tinker-confi9g" "Information about this configuration tool" \
+    "9 About tinker-config" "Information about this configuration tool" \
     3>&1 1>&2 2>&3)
   RET=$?
   if [ $RET -eq 1 ]; then
